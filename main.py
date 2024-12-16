@@ -41,31 +41,11 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-# Define a few command handlers. These usually take the two arguments update
-# and context.
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /start is issued."""
-    user = update.effective_user
-    await update.message.reply_html(
-        rf"Hi {user.mention_html()}!",
-        reply_markup=ForceReply(selective=True),
-    )
-
-
 async def help_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Send a message when the command /help is issued."""
     await update.message.reply_text("Let it be. I don't care.")
-
-
-async def hello_command(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
-    """Send a message when the command /hello is issued."""
-    await update.message.reply_text(
-        "Hello. I'm a bot which is developed by @phapnn."
-    )
 
 
 async def handle_text(
@@ -122,7 +102,8 @@ async def handle_voice(
                 await update.message.reply_text(response.json()["reply"])
             else:
                 await update.message.reply_text(
-                    "I'm sorry, but I'm having trouble processing your request. Please try again later."
+                    "Sorry, I'm having trouble processing your request. "
+                    "Please try again later."
                 )
 
             # Stop handler if success
@@ -166,17 +147,22 @@ def main() -> None:
     """Start the bot."""
     # Create the Application and pass it your bot's token.
     application = (
-        Application.builder().token(os.getenv("TELEGRAM_BOT_TOKEN")).build()
+        Application.builder()
+        .token(os.getenv("TELEGRAM_BOT_TOKEN"))
+        .concurrent_updates(True)
+        .build()
     )
 
     # on different commands - answer in Telegram
-    application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("hello", hello_command))
 
     # on non command i.e message - echo the message on Telegram
-    application.add_handler(MessageHandler(filters.TEXT, handle_text))
-    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text)
+    )
+    application.add_handler(
+        MessageHandler(filters.VOICE & ~filters.COMMAND, handle_voice)
+    )
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling(allowed_updates=Update.ALL_TYPES)
