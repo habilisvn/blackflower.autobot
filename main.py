@@ -20,7 +20,7 @@ import os
 import subprocess
 from dotenv import load_dotenv
 import httpx
-from telegram import ForceReply, Update
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -28,6 +28,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from pymemcache.client.base import Client as MemcachedClient
 
 # Enable logging
 logging.basicConfig(
@@ -48,6 +49,39 @@ async def help_command(
     await update.message.reply_text("Let it be. I don't care.")
 
 
+async def switch_ai_command(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    # AI agent options:
+    # 1. huggingface
+    # 2. openai
+    error_message = (
+        "You input invalid command.\n"
+        "Are you looking for this command: /ai [default|openai]?"
+    )
+
+    memcached_client = MemcachedClient(("localhost", 11211))
+
+    # Check if message can be split into 2 parts
+    if len(update.message.text.split(" ")) != 2:
+        await update.message.reply_text(error_message)
+        return
+
+    ai_agent = update.message.text.split(" ")[1]
+    # Check if the message is include "huggingface" or "openai"
+    if ai_agent == "default":
+        # Set the agent to huggingface
+        memcached_client.set("ai_agent", "huggingface")
+
+        await update.message.reply_text("Switched to Default AI agent...")
+    elif ai_agent == "openai":
+        memcached_client.set("ai_agent", "openai")
+
+        await update.message.reply_text("Switched to OpenAI AI agent...")
+    else:
+        await update.message.reply_text(error_message)
+
+
 async def handle_text(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
@@ -55,16 +89,29 @@ async def handle_text(
     max_retries = 10
     retry_count = 0
 
+    # Get AI agent from memcached, default to huggingface
+    memcached_client = MemcachedClient(("localhost", 11211))
+    ai_agent = memcached_client.get("ai_agent")
+    if ai_agent is None:
+        ai_agent = "huggingface"
+    else:
+        ai_agent = ai_agent.decode("utf-8")
+
     while retry_count < max_retries:
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     "http://localhost:8000/api/v1/chat/completions",
-                    json={"message": update.message.text},
+                    headers={"ai-agent": ai_agent},
+                    json={
+                        "message": update.message.text,
+                    },
+                    timeout=30,
                 )
             await update.message.reply_text(response.json()["reply"])
             return
         except Exception as e:
+            logger.error(update.message)
             logger.error(
                 f"Error making API request "
                 f"(attempt {retry_count + 1}/{max_retries}): {e}"
@@ -155,6 +202,7 @@ def main() -> None:
 
     # on different commands - answer in Telegram
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("ai", switch_ai_command))
 
     # on non command i.e message - echo the message on Telegram
     application.add_handler(
