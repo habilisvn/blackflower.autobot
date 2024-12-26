@@ -1,22 +1,6 @@
-#!/usr/bin/env python
-# pylint: disable=unused-argument
-# This program is dedicated to the public domain under the CC0 license.
-
-"""
-Simple Bot to reply to Telegram messages.
-
-First, a few handler functions are defined. Then, those functions are passed to
-the Application and registered at their respective places.
-Then, the bot is started and runs until we press Ctrl-C on the command line.
-
-Usage:
-Basic Echobot example, repeats messages.
-Press Ctrl-C on the command line or send a signal to the process to stop the
-bot.
-"""
-
 import logging
 import os
+from time import time
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import (
@@ -25,6 +9,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from telegram.error import TelegramError, TimedOut
 
 from commands.help_command import default as help_command
 from commands.switch_ai_command import default as switch_ai_command
@@ -72,4 +57,22 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    previous_error_time = time()
+    error_count = 0
+
+    while True:
+        try:
+            main()
+        except (TelegramError, TimedOut) as e:
+            logger.error(f"An error occurred: {e}")
+
+            if time() - previous_error_time < 600:
+                # Increase the sleep time 5 seconds for each error
+                time.sleep(5 + error_count * 5)
+            else:
+                # Reset if the error is the first error in 10 minutes
+                time.sleep(5)
+                error_count = 0
+
+            previous_error_time = time()
+            error_count += 1

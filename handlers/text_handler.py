@@ -1,8 +1,9 @@
 import logging
-import httpx
 from telegram import Update
 from telegram.ext import ContextTypes
 from pymemcache.client.base import Client as MemcachedClient
+
+from services.chat_service import completions
 
 
 logger = logging.getLogger(__name__)
@@ -17,24 +18,17 @@ async def handle_text(
 
     # Get AI agent from memcached, default to huggingface
     memcached_client = MemcachedClient(("localhost", 11211))
-    ai_agent = memcached_client.get("ai_agent")
-    if ai_agent is None:
-        ai_agent = "huggingface"
-    else:
-        ai_agent = ai_agent.decode("utf-8")
+    ai_agent = memcached_client.get("ai_agent", "openai")
 
+    # Terminate if the count of retries is greater than max_retries
     while retry_count < max_retries:
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "http://localhost:8000/api/v1/chat/completions",
-                    headers={"ai-agent": ai_agent},
-                    json={
-                        "message": update.message.text,
-                    },
-                    timeout=30,
-                )
-            await update.message.reply_text(response.json()["reply"])
+            response = await completions(
+                message=update.message.text, ai_agent=ai_agent
+            )
+            await update.message.reply_text(response)
+
+            # Return after successful response
             return
         except Exception as e:
             logger.error(update.message)
