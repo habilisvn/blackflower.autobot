@@ -9,7 +9,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from telegram.error import TelegramError, TimedOut
+from telegram.error import TelegramError, TimedOut, NetworkError
 
 from commands.help_command import default as help_command
 from commands.switch_ai_command import default as switch_ai_command
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     while True:
         try:
             main()
-        except (TelegramError, TimedOut) as e:
+        except (TelegramError, TimedOut, NetworkError) as e:
             logger.error(f"An error occurred: {e}")
 
             if time() - previous_error_time < 600:

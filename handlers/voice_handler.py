@@ -3,6 +3,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from services.chat_service import transcribe
 from utils.converters import convert_to_mp3
 
 logger = logging.getLogger(__name__)
@@ -26,19 +27,8 @@ async def handle_voice(
     while retry_count < max_retries:
         try:
             # using httpx to send the mp3 file to the server
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "http://localhost:8000/api/v1/chat/transcribe",
-                    files={"upload_file": open(output_file, "rb")},
-                )
-
-            if "reply" in response.json():
-                await update.message.reply_text(response.json()["reply"])
-            else:
-                await update.message.reply_text(
-                    "Sorry, I'm having trouble processing your request. "
-                    "Please try again later."
-                )
+            response = await transcribe(output_file)
+            await update.message.reply_text(response)
 
             # Stop handler if success
             return
